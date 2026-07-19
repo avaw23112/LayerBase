@@ -98,10 +98,15 @@ public sealed class PublicApiStabilityTests
         Type runtimeType = typeof(LayerRuntime);
 
         Assert.That(runtimeType.GetProperty("FullSnap", BindingFlags.Public | BindingFlags.Instance), Is.Null);
-        Assert.That(runtimeType.GetMethod("SerializeFullSnapAsync", BindingFlags.Public | BindingFlags.Instance), Is.Not.Null);
-        Assert.That(runtimeType.GetMethod("DeserializeFullSnapAsync", BindingFlags.Public | BindingFlags.Instance), Is.Not.Null);
-        Assert.That(runtimeType.GetMethod("SerializeFullSnapJsonAsync", BindingFlags.Public | BindingFlags.Instance), Is.Not.Null);
-        Assert.That(runtimeType.GetMethod("DeserializeFullSnapJsonAsync", BindingFlags.Public | BindingFlags.Instance), Is.Not.Null);
+        string[] methodNames = runtimeType
+            .GetMethods(BindingFlags.Public | BindingFlags.Instance)
+            .Select(static method => method.Name)
+            .ToArray();
+
+        Assert.That(methodNames, Does.Contain("SerializeFullSnapAsync"));
+        Assert.That(methodNames, Does.Contain("DeserializeFullSnapAsync"));
+        Assert.That(methodNames, Does.Contain("SerializeFullSnapJsonAsync"));
+        Assert.That(methodNames, Does.Contain("DeserializeFullSnapJsonAsync"));
     }
 
     [Test]

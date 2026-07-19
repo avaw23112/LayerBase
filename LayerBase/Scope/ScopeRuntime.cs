@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using Arch.Core;
 using LayerBase.Actor;
 using LayerBase.Async;
@@ -27,6 +28,11 @@ internal sealed class ScopeRuntime : IDisposable
     private ScopeSafePointState _safePointState = ScopeSafePointState.Running;
     private long _safePointToken;
     private ScopeSnapPlan _snapPlan = ScopeSnapPlan.Empty;
+    private long _snapSerializeCount;
+    private long _snapDeserializeCount;
+    private long _snapFailureCount;
+    private long _snapLastDurationTicks;
+    private long _snapLastBytes;
     private ScopeRuntimeDirectory? _scopeDirectory;
     private float _fixedUpdateAccumulator;
     private bool _runtimeStopRun;
@@ -1281,15 +1287,27 @@ internal sealed class ScopeRuntime : IDisposable
     internal ScopeSerializeFullSnapResponse SerializeFullSnapOnOwnerThread()
     {
         RequireOwnerThread();
+        long startedAt = Stopwatch.GetTimestamp();
+        long byteCount = 0;
         try
         {
             EnterSafePointForSnap();
+            SnapSection[] sections = WriteSnapshotForSnap().Sections;
+            byteCount = CountSectionBytes(sections);
+            Interlocked.Increment(ref _snapSerializeCount);
             return new ScopeSerializeFullSnapResponse(
                 ScopeControlResult.Succeeded,
-                WriteSnapshotForSnap().Sections);
+                sections);
+        }
+        catch
+        {
+            Interlocked.Increment(ref _snapFailureCount);
+            throw;
         }
         finally
         {
+            Volatile.Write(ref _snapLastBytes, byteCount);
+            Volatile.Write(ref _snapLastDurationTicks, Stopwatch.GetElapsedTime(startedAt).Ticks);
             ReleaseSafePointAfterFullSnapTransaction();
         }
     }
@@ -1297,14 +1315,24 @@ internal sealed class ScopeRuntime : IDisposable
     internal ScopeDeserializeFullSnapResponse DeserializeFullSnapOnOwnerThread(SnapDocument document)
     {
         RequireOwnerThread();
+        long startedAt = Stopwatch.GetTimestamp();
+        long byteCount = JsonSnapCodec.GetDocumentByteCount(document);
         try
         {
             EnterSafePointForSnap();
             ReadSnapshotForSnap(document);
+            Interlocked.Increment(ref _snapDeserializeCount);
             return new ScopeDeserializeFullSnapResponse(ScopeControlResult.Succeeded);
+        }
+        catch
+        {
+            Interlocked.Increment(ref _snapFailureCount);
+            throw;
         }
         finally
         {
+            Volatile.Write(ref _snapLastBytes, byteCount);
+            Volatile.Write(ref _snapLastDurationTicks, Stopwatch.GetElapsedTime(startedAt).Ticks);
             ReleaseSafePointAfterFullSnapTransaction();
         }
     }
@@ -1314,8 +1342,22 @@ internal sealed class ScopeRuntime : IDisposable
         if (_safePointState == ScopeSafePointState.Running)
             return;
 
+        if (_safePointState == ScopeSafePointState.Faulted)
+            return;
+
         _safePointState = ScopeSafePointState.Releasing;
         _safePointState = ScopeSafePointState.Running;
+    }
+
+    private static long CountSectionBytes(SnapSection[] sections)
+    {
+        long bytes = 0;
+        for (int i = 0; i < sections.Length; i++)
+        {
+            bytes += JsonSnapCodec.GetSectionByteCount(sections[i]);
+        }
+
+        return bytes;
     }
 
     private void DispatchInitializeControl(ScopeCallEnvelope envelope)
@@ -1689,10 +1731,17 @@ internal sealed class ScopeRuntime : IDisposable
             new SnapDiagnosticsSnapshot(
                 _safePointState,
                 _snapPlan.Nodes.Length,
-                serializeCount: 0,
-                deserializeCount: 0,
-                failureCount: 0),
-            Volatile.Read(ref _faultCount));
+                Volatile.Read(ref _snapSerializeCount),
+                Volatile.Read(ref _snapDeserializeCount),
+                Volatile.Read(ref _snapFailureCount),
+                Volatile.Read(ref _snapLastDurationTicks),
+                Volatile.Read(ref _snapLastBytes)),
+            Volatile.Read(ref _faultCount),
+            Transport.CompletionInbox.Count,
+            Transport.FaultInbox.Count,
+            Transport.FaultInbox.DroppedCount,
+            Transport.FaultInbox.MergedCount,
+            Transport.FaultInbox.HighWatermark);
     }
 
     private PostScheduler RequireScheduler()

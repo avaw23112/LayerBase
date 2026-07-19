@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using LayerBase.Async;
 using LayerBase.Scope;
 
@@ -98,9 +99,15 @@ internal sealed class FullSnapRuntime
 
     internal void Deserialize(SnapDocument document)
     {
+        Deserialize(document, FullSnapLimits.Default);
+    }
+
+    internal void Deserialize(SnapDocument document, FullSnapLimits limits)
+    {
         if (document == null)
             throw new ArgumentNullException(nameof(document));
 
+        ValidateDocument(document, limits);
         ThrowIfWorkerScopeRequiresAsync();
         foreach (ScopeRuntime scope in _scopes.Scopes)
             scope.DeserializeFullSnapOnOwnerThread(document);
@@ -108,9 +115,18 @@ internal sealed class FullSnapRuntime
 
     internal async LBTask DeserializeAsync(SnapDocument document, CancellationToken cancellationToken = default)
     {
+        await DeserializeAsync(document, FullSnapLimits.Default, cancellationToken);
+    }
+
+    internal async LBTask DeserializeAsync(
+        SnapDocument document,
+        FullSnapLimits limits,
+        CancellationToken cancellationToken = default)
+    {
         if (document == null)
             throw new ArgumentNullException(nameof(document));
 
+        ValidateDocument(document, limits);
         cancellationToken.ThrowIfCancellationRequested();
         foreach (ScopeRuntime scope in _scopes.Scopes)
         {
@@ -140,7 +156,15 @@ internal sealed class FullSnapRuntime
 
     internal void DeserializeJson(string json, JsonSerializerOptions? options = null)
     {
-        Deserialize(JsonSnapCodec.DecodeFromString(json, options));
+        Deserialize(JsonSnapCodec.DecodeFromString(json, FullSnapLimits.Default, options));
+    }
+
+    internal void DeserializeJson(
+        string json,
+        FullSnapLimits limits,
+        JsonSerializerOptions? options = null)
+    {
+        Deserialize(JsonSnapCodec.DecodeFromString(json, limits, options), limits);
     }
 
     internal async LBTask DeserializeJsonAsync(
@@ -148,8 +172,18 @@ internal sealed class FullSnapRuntime
         JsonSerializerOptions? options = null,
         CancellationToken cancellationToken = default)
     {
-        SnapDocument document = JsonSnapCodec.DecodeFromString(json, options);
+        SnapDocument document = JsonSnapCodec.DecodeFromString(json, FullSnapLimits.Default, options);
         await DeserializeAsync(document, cancellationToken);
+    }
+
+    internal async LBTask DeserializeJsonAsync(
+        string json,
+        FullSnapLimits limits,
+        JsonSerializerOptions? options = null,
+        CancellationToken cancellationToken = default)
+    {
+        SnapDocument document = JsonSnapCodec.DecodeFromString(json, limits, options);
+        await DeserializeAsync(document, limits, cancellationToken);
     }
 
     private void ThrowIfWorkerScopeRequiresAsync()
@@ -165,5 +199,157 @@ internal sealed class FullSnapRuntime
     {
         for (int i = 0; i < sections.Length; i++)
             document.AddSection(sections[i]);
+    }
+
+    private void ValidateDocument(SnapDocument document, FullSnapLimits limits)
+    {
+        limits.ThrowIfInvalid();
+        if (document.Sections == null)
+        {
+            throw new SnapFormatException("FullSnap document sections cannot be null.");
+        }
+
+        if (document.FormatVersion < limits.MinFormatVersion ||
+            document.FormatVersion > limits.MaxFormatVersion)
+        {
+            throw new SnapFormatException(
+                $"FullSnap FormatVersion {document.FormatVersion} is outside supported range {limits.MinFormatVersion}-{limits.MaxFormatVersion}.");
+        }
+
+        int scopeCount = 0;
+        var scopeIds = new HashSet<int>();
+        foreach (ScopeRuntime scope in _scopes.Scopes)
+        {
+            scopeCount++;
+            if (!scopeIds.Add(scope.ScopeId))
+            {
+                throw new SnapFormatException($"Duplicate FullSnap ScopeId `{scope.ScopeId}`.");
+            }
+        }
+
+        if (scopeCount > limits.MaxScopeCount)
+        {
+            throw new SnapFormatException(
+                $"FullSnap scope count exceeds MaxScopeCount ({scopeCount} > {limits.MaxScopeCount}).");
+        }
+
+        foreach (int plannedScopeId in _pendingPlans.Keys)
+        {
+            if (!scopeIds.Contains(plannedScopeId))
+            {
+                throw new SnapFormatException($"FullSnap plan references unknown ScopeId `{plannedScopeId}`.");
+            }
+        }
+
+        int totalBytes = JsonSnapCodec.GetDocumentByteCount(document);
+        if (totalBytes > limits.MaxTotalBytes)
+        {
+            throw new SnapFormatException(
+                $"FullSnap document exceeds MaxTotalBytes ({totalBytes} > {limits.MaxTotalBytes}).");
+        }
+
+        var scopeBytes = new Dictionary<int, long>();
+        var scopeSections = new Dictionary<int, int>();
+        var sectionScopes = BuildSectionScopeMap();
+
+        foreach (KeyValuePair<string, SnapSection> entry in document.Sections)
+        {
+            string key = entry.Key;
+            SnapSection section = entry.Value;
+            if (section == null)
+            {
+                throw new SnapFormatException($"FullSnap section `{key}` cannot be null.");
+            }
+
+            if (string.IsNullOrWhiteSpace(key) || string.IsNullOrWhiteSpace(section.Key))
+            {
+                throw new SnapFormatException("FullSnap section key cannot be empty.");
+            }
+
+            if (!string.Equals(key, section.Key, StringComparison.Ordinal))
+            {
+                throw new SnapFormatException(
+                    $"FullSnap section dictionary key `{key}` does not match payload key `{section.Key}`.");
+            }
+
+            if (!_keys.TryGetValue(key, out ScopeSnapNodePlan plan))
+            {
+                throw new SnapFormatException($"FullSnap section `{key}` does not match a registered scope payload.");
+            }
+
+            if (section.Version != plan.Version)
+            {
+                throw new SnapFormatException(
+                    $"FullSnap section `{key}` version {section.Version} does not match expected version {plan.Version}.");
+            }
+
+            if (section.Data == null)
+            {
+                throw new SnapFormatException($"FullSnap section `{key}` has null data.");
+            }
+
+            int depth = JsonSnapCodec.GetJsonDepth(section.Data);
+            if (depth > limits.MaxJsonDepth)
+            {
+                throw new SnapFormatException(
+                    $"FullSnap section `{key}` exceeds MaxJsonDepth ({depth} > {limits.MaxJsonDepth}).");
+            }
+
+            int scopeId = sectionScopes[key];
+            scopeSections[scopeId] = scopeSections.TryGetValue(scopeId, out int count) ? count + 1 : 1;
+            scopeBytes[scopeId] = scopeBytes.TryGetValue(scopeId, out long bytes)
+                ? bytes + JsonSnapCodec.GetSectionByteCount(section)
+                : JsonSnapCodec.GetSectionByteCount(section);
+        }
+
+        foreach (KeyValuePair<int, List<ScopeSnapNodePlan>> scopePlan in _pendingPlans)
+        {
+            if (scopePlan.Value.Count > limits.MaxSectionsPerScope)
+            {
+                throw new SnapFormatException(
+                    $"FullSnap ScopeId `{scopePlan.Key}` exceeds MaxSectionsPerScope ({scopePlan.Value.Count} > {limits.MaxSectionsPerScope}).");
+            }
+
+            foreach (ScopeSnapNodePlan node in scopePlan.Value)
+            {
+                if (!document.Sections.ContainsKey(node.Key))
+                {
+                    throw new SnapFormatException(
+                        $"Missing required FullSnap section `{node.Key}` for ScopeId `{scopePlan.Key}`.");
+                }
+            }
+        }
+
+        foreach (KeyValuePair<int, int> scopeSectionCount in scopeSections)
+        {
+            if (scopeSectionCount.Value > limits.MaxSectionsPerScope)
+            {
+                throw new SnapFormatException(
+                    $"FullSnap ScopeId `{scopeSectionCount.Key}` exceeds MaxSectionsPerScope ({scopeSectionCount.Value} > {limits.MaxSectionsPerScope}).");
+            }
+        }
+
+        foreach (KeyValuePair<int, long> scopeByteCount in scopeBytes)
+        {
+            if (scopeByteCount.Value > limits.MaxScopeBytes)
+            {
+                throw new SnapFormatException(
+                    $"FullSnap ScopeId `{scopeByteCount.Key}` exceeds MaxScopeBytes ({scopeByteCount.Value} > {limits.MaxScopeBytes}).");
+            }
+        }
+    }
+
+    private Dictionary<string, int> BuildSectionScopeMap()
+    {
+        var sectionScopes = new Dictionary<string, int>(StringComparer.Ordinal);
+        foreach (KeyValuePair<int, List<ScopeSnapNodePlan>> scopePlan in _pendingPlans)
+        {
+            foreach (ScopeSnapNodePlan node in scopePlan.Value)
+            {
+                sectionScopes[node.Key] = scopePlan.Key;
+            }
+        }
+
+        return sectionScopes;
     }
 }

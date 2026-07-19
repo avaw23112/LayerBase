@@ -66,7 +66,12 @@ public readonly struct ScopeDiagnosticsSnapshot
         EcsDiagnosticsSnapshot ecs,
         ToolDiagnosticsSnapshot tools,
         SnapDiagnosticsSnapshot snap,
-        long faultCount)
+        long faultCount,
+        int completionInboxCount = 0,
+        int faultInboxCount = 0,
+        int faultInboxDropped = 0,
+        int faultInboxMerged = 0,
+        int faultInboxHighWatermark = 0)
     {
         ScopeId = scopeId;
         ScopeName = scopeName ?? string.Empty;
@@ -95,6 +100,11 @@ public readonly struct ScopeDiagnosticsSnapshot
         Tools = tools;
         Snap = snap;
         FaultCount = faultCount;
+        CompletionInboxCount = completionInboxCount;
+        FaultInboxCount = faultInboxCount;
+        FaultInboxDropped = faultInboxDropped;
+        FaultInboxMerged = faultInboxMerged;
+        FaultInboxHighWatermark = faultInboxHighWatermark;
     }
 
     public int ScopeId { get; }
@@ -124,6 +134,11 @@ public readonly struct ScopeDiagnosticsSnapshot
     public ToolDiagnosticsSnapshot Tools { get; }
     public SnapDiagnosticsSnapshot Snap { get; }
     public long FaultCount { get; }
+    public int CompletionInboxCount { get; }
+    public int FaultInboxCount { get; }
+    public int FaultInboxDropped { get; }
+    public int FaultInboxMerged { get; }
+    public int FaultInboxHighWatermark { get; }
 }
 
 public readonly struct EcsDiagnosticsSnapshot
@@ -246,13 +261,17 @@ public readonly struct SnapDiagnosticsSnapshot
         int nodeCount,
         long serializeCount,
         long deserializeCount,
-        long failureCount)
+        long failureCount,
+        long lastDurationTicks = 0,
+        long lastBytes = 0)
     {
         State = state;
         NodeCount = nodeCount;
         SerializeCount = serializeCount;
         DeserializeCount = deserializeCount;
         FailureCount = failureCount;
+        LastDurationTicks = lastDurationTicks;
+        LastBytes = lastBytes;
     }
 
     public ScopeSafePointState State { get; }
@@ -260,4 +279,6 @@ public readonly struct SnapDiagnosticsSnapshot
     public long SerializeCount { get; }
     public long DeserializeCount { get; }
     public long FailureCount { get; }
+    public long LastDurationTicks { get; }
+    public long LastBytes { get; }
 }
