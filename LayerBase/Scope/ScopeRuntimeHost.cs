@@ -99,6 +99,15 @@ internal sealed class ScopeRuntimeHost : IDisposable
 
     public void StartWorkers()
     {
+        var defaultDeadline = ShutdownDeadline.Start(
+            TimeSpan.FromSeconds(15));
+
+        StartWorkers(in defaultDeadline);
+    }
+
+    public void StartWorkers(
+        in ShutdownDeadline deadline)
+    {
         ThrowIfDisposed();
 
         if (_workersStarted)
@@ -106,7 +115,7 @@ internal sealed class ScopeRuntimeHost : IDisposable
 
         for (int i = 0; i < _workers.Length; i++)
         {
-            _workers[i].Start();
+            _workers[i].Start(in deadline);
         }
 
         _workersStarted = true;

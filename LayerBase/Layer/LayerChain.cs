@@ -90,62 +90,101 @@ internal sealed class LayerChain
         }
     }
 
-    private static void RunScopeLifecycleOnOwnerThread(IReadOnlyList<ScopeRuntime> scopes, ScopeLifecyclePhase phase)
+    private static void RunScopeLifecycleOnOwnerThread(
+        IReadOnlyList<ScopeRuntime> scopes,
+        ScopeLifecyclePhase phase,
+        in ShutdownDeadline deadline)
     {
         for (int i = scopes.Count - 1; i >= 0; i--)
         {
-            var scope = scopes[i];
-            if (scope.Options.Threading == ScopeThreadingMode.Worker)
+            ScopeRuntime scope = scopes[i];
+
+            if (scope.Options.Threading != ScopeThreadingMode.Worker)
             {
-                try
-                {
-                    switch (phase)
-                    {
-                        case ScopeLifecyclePhase.Initialize:
-                            scope.RequestInitializeAsync().GetAwaiter().GetResult();
-                            break;
-                        case ScopeLifecyclePhase.PostBuild:
-                            scope.RequestPostBuildAsync().GetAwaiter().GetResult();
-                            break;
-                        case ScopeLifecyclePhase.RuntimeStart:
-                            SpinWaitForWorkerControl(scope.RequestRuntimeStartAsync());
-                            break;
-                    }
-                }
-                catch (Exception ex)
-                {
-                    scope.ReportFault(ex, ScopeFaultPhase.ServiceUpdate);
-                }
+                RunInlineLifecycle(scope, phase);
+                continue;
             }
-            else
+
+            switch (phase)
             {
-                switch (phase)
+                case ScopeLifecyclePhase.Initialize:
                 {
-                    case ScopeLifecyclePhase.Initialize:
-                        scope.LifecyclePlan.RunInitialize();
-                        break;
-                    case ScopeLifecyclePhase.PostBuild:
-                        scope.LifecyclePlan.RunPostBuild();
-                        break;
-                    case ScopeLifecyclePhase.RuntimeStart:
-                        scope.LifecyclePlan.RunRuntimeStart();
-                        break;
+                    ScopeInitializeResponse response =
+                        ScopeControlBarrier.Wait(
+                            scope.RequestInitializeAsync(),
+                            in deadline,
+                            $"{scope.Descriptor.Name}.Initialize");
+
+                    ScopeControlBarrier.EnsureSucceeded(
+                        response.Result,
+                        "Initialize",
+                        scope);
+                    break;
                 }
+
+                case ScopeLifecyclePhase.PostBuild:
+                {
+                    ScopePostBuildResponse response =
+                        ScopeControlBarrier.Wait(
+                            scope.RequestPostBuildAsync(),
+                            in deadline,
+                            $"{scope.Descriptor.Name}.PostBuild");
+
+                    ScopeControlBarrier.EnsureSucceeded(
+                        response.Result,
+                        "PostBuild",
+                        scope);
+                    break;
+                }
+
+                case ScopeLifecyclePhase.RuntimeStart:
+                {
+                    ScopeRuntimeStartResponse response =
+                        ScopeControlBarrier.Wait(
+                            scope.RequestRuntimeStartAsync(),
+                            in deadline,
+                            $"{scope.Descriptor.Name}.RuntimeStart");
+
+                    ScopeControlBarrier.EnsureSucceeded(
+                        response.Result,
+                        "RuntimeStart",
+                        scope);
+                    break;
+                }
+
+                default:
+                    throw new ArgumentOutOfRangeException(
+                        nameof(phase),
+                        phase,
+                        "Unsupported build lifecycle phase.");
             }
         }
     }
 
-    private static void SpinWaitForWorkerControl<T>(LayerBase.Async.LBTask<T> task) where T : struct
+    private static void RunInlineLifecycle(
+        ScopeRuntime scope,
+        ScopeLifecyclePhase phase)
     {
-        var awaiter = task.GetAwaiter();
-        System.Diagnostics.Stopwatch sw = System.Diagnostics.Stopwatch.StartNew();
-        while (!awaiter.IsCompleted)
+        switch (phase)
         {
-            if (sw.ElapsedMilliseconds > 5000)
-                return;
-            Thread.Sleep(0);
+            case ScopeLifecyclePhase.Initialize:
+                scope.LifecyclePlan.RunInitialize();
+                break;
+
+            case ScopeLifecyclePhase.PostBuild:
+                scope.LifecyclePlan.RunPostBuild();
+                break;
+
+            case ScopeLifecyclePhase.RuntimeStart:
+                scope.LifecyclePlan.RunRuntimeStart();
+                break;
+
+            default:
+                throw new ArgumentOutOfRangeException(
+                    nameof(phase),
+                    phase,
+                    "Unsupported build lifecycle phase.");
         }
-        awaiter.GetResult();
     }
 
     /// <summary>
@@ -200,12 +239,26 @@ internal sealed class LayerChain
     /// <summary>
     /// 在 Worker 启动后执行生命周期阶段。
     /// </summary>
-    internal void RunLifecyclePhases(Action? afterPostBuild = null)
+    internal void RunLifecyclePhases(
+        in ShutdownDeadline deadline,
+        Action? afterPostBuild = null)
     {
-        RunScopeLifecycleOnOwnerThread(_owner.ScopeHost.Scopes, ScopeLifecyclePhase.Initialize);
-        RunScopeLifecycleOnOwnerThread(_owner.ScopeHost.Scopes, ScopeLifecyclePhase.PostBuild);
+        RunScopeLifecycleOnOwnerThread(
+            _owner.ScopeHost.Scopes,
+            ScopeLifecyclePhase.Initialize,
+            in deadline);
+
+        RunScopeLifecycleOnOwnerThread(
+            _owner.ScopeHost.Scopes,
+            ScopeLifecyclePhase.PostBuild,
+            in deadline);
+
         afterPostBuild?.Invoke();
-        RunScopeLifecycleOnOwnerThread(_owner.ScopeHost.Scopes, ScopeLifecyclePhase.RuntimeStart);
+
+        RunScopeLifecycleOnOwnerThread(
+            _owner.ScopeHost.Scopes,
+            ScopeLifecyclePhase.RuntimeStart,
+            in deadline);
     }
 
     /// <summary>

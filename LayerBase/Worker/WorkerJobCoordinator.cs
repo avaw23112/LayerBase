@@ -91,13 +91,12 @@ internal sealed class WorkerJobCoordinator : IDisposable
                     {
                         var callback = (CancellationCallbackState)state!;
 
-                        var request = new WorkerCancelRequestedScopeEvent(
-                            callback.Handle);
+                        ScopeCompletionEnvelope envelope =
+                            ScopeCompletionEnvelope.WorkerCancelRequested(
+                                callback.Handle);
 
-                        _ = callback.Endpoint.Transport.EnqueueEvent(
-                            WorkerScopeEventRouteIds.CancelRequested,
-                            ScopeEventClass.Critical,
-                            in request);
+                        callback.Endpoint.Transport.EnqueueCompletion(
+                            in envelope);
                     },
                     callbackState);
         }

@@ -13,7 +13,8 @@ internal sealed class ScopeWorker : IDisposable
 {
     private readonly ScopeRuntime _runtime;
     private readonly Thread _thread;
-    private readonly ManualResetEventSlim _started = new(false);
+    private readonly ManualResetEventSlim _ready = new(false);
+    private Exception? _startupException;
     private readonly AutoResetEvent _workSignal = new(initialState: false);
     private bool _startedThread;
     private bool _disposed;
@@ -35,14 +36,31 @@ internal sealed class ScopeWorker : IDisposable
 
     internal ScopeRuntime Runtime => _runtime;
 
-    public void Start()
+    public void Start(in ShutdownDeadline deadline)
     {
         if (_startedThread)
             return;
 
         _startedThread = true;
         _thread.Start();
-        _started.Wait();
+
+        int remaining = deadline.RemainingMilliseconds;
+
+        if (remaining <= 0 || !_ready.Wait(remaining))
+        {
+            throw new TimeoutException(
+                $"Scope worker `{_runtime.Descriptor.Name}` did not become ready before the build deadline.");
+        }
+
+        Exception? startupException =
+            Volatile.Read(ref _startupException);
+
+        if (startupException != null)
+        {
+            throw new InvalidOperationException(
+                $"Scope worker `{_runtime.Descriptor.Name}` failed during startup.",
+                startupException);
+        }
     }
 
     internal ScopeWorkerShutdownResult Stop(in ShutdownDeadline deadline)
@@ -100,84 +118,35 @@ internal sealed class ScopeWorker : IDisposable
 
         _resourcesReleased = true;
 
-        _started.Dispose();
+        _ready.Dispose();
         _workSignal.Dispose();
     }
 
     private void Run()
     {
-        _started.Set();
-
         SynchronizationContext? previousContext =
             SynchronizationContext.Current;
 
         try
         {
-            _runtime.InstallSynchronizationContext();
+            try
+            {
+                _runtime.InstallSynchronizationContext();
 
-            SynchronizationContext.SetSynchronizationContext(
-                _runtime.SynchronizationContext);
+                SynchronizationContext.SetSynchronizationContext(
+                    _runtime.SynchronizationContext);
+            }
+            catch (Exception ex)
+            {
+                Volatile.Write(ref _startupException, ex);
+                _ready.Set();
+                return;
+            }
 
             ScopeTickOptions tick =
                 _runtime.Options.Tick;
 
-            long intervalTimestampTicks =
-                CalculateIntervalTimestampTicks(
-                    tick.RateHz);
-
-            long nextTickDeadline =
-                Stopwatch.GetTimestamp();
-
-            float fixedDeltaTime =
-                tick.RateHz > 0
-                    ? 1f / tick.RateHz
-                    : 0f;
-
-            while (_runtime.State !=
-                   ScopeRuntimeState.Disposed)
-            {
-                try
-                {
-                    _runtime.PumpWorkerImmediateWork();
-
-                    if (_runtime.State ==
-                        ScopeRuntimeState.Disposed)
-                    {
-                        break;
-                    }
-
-                    long now =
-                        Stopwatch.GetTimestamp();
-
-                    if (now >= nextTickDeadline)
-                    {
-                        PumpDueTicks(
-                            in tick,
-                            intervalTimestampTicks,
-                            fixedDeltaTime,
-                            ref nextTickDeadline);
-
-                        continue;
-                    }
-
-                    if (_runtime.HasImmediateWork)
-                        continue;
-
-                    int waitMilliseconds =
-                        CalculateWaitMilliseconds(
-                            now,
-                            nextTickDeadline);
-
-                    _workSignal.WaitOne(
-                        waitMilliseconds);
-                }
-                catch (Exception ex)
-                {
-                    _runtime.ReportFault(
-                        ex,
-                        ScopeFaultPhase.WorkerLoop);
-                }
-            }
+            RunWorkerLoop(in tick);
         }
         finally
         {
@@ -193,6 +162,69 @@ internal sealed class ScopeWorker : IDisposable
             {
                 SynchronizationContext.SetSynchronizationContext(
                     previousContext);
+            }
+        }
+    }
+
+    private void RunWorkerLoop(in ScopeTickOptions tick)
+    {
+        _ready.Set();
+
+        long intervalTimestampTicks =
+            CalculateIntervalTimestampTicks(
+                tick.RateHz);
+
+        long nextTickDeadline =
+            Stopwatch.GetTimestamp();
+
+        float fixedDeltaTime =
+            tick.RateHz > 0
+                ? 1f / tick.RateHz
+                : 0f;
+
+        while (_runtime.State !=
+               ScopeRuntimeState.Disposed)
+        {
+            try
+            {
+                _runtime.PumpWorkerImmediateWork();
+
+                if (_runtime.State ==
+                    ScopeRuntimeState.Disposed)
+                {
+                    break;
+                }
+
+                long now =
+                    Stopwatch.GetTimestamp();
+
+                if (now >= nextTickDeadline)
+                {
+                    PumpDueTicks(
+                        in tick,
+                        intervalTimestampTicks,
+                        fixedDeltaTime,
+                        ref nextTickDeadline);
+
+                    continue;
+                }
+
+                if (_runtime.HasImmediateWork)
+                    continue;
+
+                int waitMilliseconds =
+                    CalculateWaitMilliseconds(
+                        now,
+                        nextTickDeadline);
+
+                _workSignal.WaitOne(
+                    waitMilliseconds);
+            }
+            catch (Exception ex)
+            {
+                _runtime.ReportFault(
+                    ex,
+                    ScopeFaultPhase.WorkerLoop);
             }
         }
     }

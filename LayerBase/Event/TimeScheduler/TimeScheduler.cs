@@ -235,13 +235,19 @@ public sealed class TimeScheduler<TPayload> : IDisposable
         Exception? firstException = null;
         int processedInTick = 0;
 
-        current = ProcessTimerList(current, sink, ref processedInTick, ref firstException);
-
-        if (current != -1)
-            MoveToOverdue(current);
+        ProcessOverdueQueue(sink, ref processedInTick, ref firstException);
 
         if (processedInTick < _maxExpiredPerTick)
-            ProcessOverdueQueue(sink, ref processedInTick, ref firstException);
+        {
+            current = ProcessTimerList(current, sink, ref processedInTick, ref firstException);
+
+            if (current != -1)
+                MoveToOverdue(current);
+        }
+        else if (current != -1)
+        {
+            MoveToOverdue(current);
+        }
 
         if (firstException != null)
             throw firstException;
@@ -328,6 +334,29 @@ public sealed class TimeScheduler<TPayload> : IDisposable
             MoveToOverdue(remaining);
     }
 
+    private void AppendSingleToOverdue(int index)
+    {
+        ref TimerEntry<TPayload> entry =
+            ref FastArray.At(_pool, index);
+
+        entry.SlotIndex = OverdueSlotIndex;
+        entry.Next = -1;
+        entry.Prev = _overdueTail;
+
+        if (_overdueTail == -1)
+        {
+            _overdueHead = index;
+        }
+        else
+        {
+            FastArray.At(
+                _pool,
+                _overdueTail).Next = index;
+        }
+
+        _overdueTail = index;
+    }
+
     [MethodImpl(MethodImplOptions.NoInlining)]
     private void RescheduleRepeatSlow(int index, ref TimerEntry<TPayload> entry)
     {
@@ -337,17 +366,44 @@ public sealed class TimeScheduler<TPayload> : IDisposable
             return;
         }
 
-        if (entry.RemainingRepeatCount > 0) entry.RemainingRepeatCount--;
+        if (entry.RemainingRepeatCount > 0)
+            entry.RemainingRepeatCount--;
 
-        long nextExpire;
-        if ((entry.Flags & TimerFlags.FixedRate) != 0)
-            nextExpire = entry.ExpireTick + entry.IntervalTicks;
-        else
-            nextExpire = _currentTick + entry.IntervalTicks;
+        bool fixedRate =
+            (entry.Flags & TimerFlags.FixedRate) != 0;
 
-        if (nextExpire <= _currentTick) nextExpire = _currentTick + entry.IntervalTicks;
+        bool catchUp =
+            (entry.Flags & TimerFlags.CatchUp) != 0;
 
-        entry.ExpireTick = nextExpire;
+        if (!fixedRate)
+        {
+            entry.ExpireTick =
+                _currentTick + entry.IntervalTicks;
+
+            PlaceEntry(index);
+            return;
+        }
+
+        long scheduledNext =
+            entry.ExpireTick + entry.IntervalTicks;
+
+        if (!catchUp && scheduledNext <= _currentTick)
+        {
+            entry.ExpireTick =
+                _currentTick + entry.IntervalTicks;
+
+            PlaceEntry(index);
+            return;
+        }
+
+        entry.ExpireTick = scheduledNext;
+
+        if (scheduledNext <= _currentTick)
+        {
+            AppendSingleToOverdue(index);
+            return;
+        }
+
         PlaceEntry(index);
     }
 

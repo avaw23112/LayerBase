@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using LayerBase;
 using LayerBase.DI.Options;
 using LayerBase.Layers;
@@ -46,12 +47,12 @@ internal sealed class ServiceProvider : IServiceProvider, IDisposable
         if (Interlocked.Exchange(ref _disposed, 1) != 0)
             return;
 
-        foreach (var kvp in _instances.ToArray())
-        {
-            if (kvp.Value.IsValueCreated && kvp.Value.Value is IDisposable disposable)
-                disposable.Dispose();
-        }
+        Lazy<object>[] values =
+            _instances.Values.ToArray();
+
         _instances.Clear();
+
+        DisposeUniqueInstances(values);
     }
 
     public object? GetService(Type serviceType)
@@ -117,17 +118,24 @@ internal sealed class ServiceProvider : IServiceProvider, IDisposable
 
     internal void DisposeScope(int ownerScopeId)
     {
-        var keysToRemove = new List<ServiceKey>();
-        foreach (var kvp in _instances)
+        var removed =
+            new List<Lazy<object>>();
+
+        foreach (KeyValuePair<ServiceKey, Lazy<object>> pair
+                 in _instances)
         {
-            if (kvp.Key.OwnerScopeId == ownerScopeId)
-                keysToRemove.Add(kvp.Key);
+            if (pair.Key.OwnerScopeId != ownerScopeId)
+                continue;
+
+            if (_instances.TryRemove(
+                    pair.Key,
+                    out Lazy<object>? lazy))
+            {
+                removed.Add(lazy);
+            }
         }
-        foreach (var key in keysToRemove)
-        {
-            if (_instances.TryRemove(key, out var lazy) && lazy.IsValueCreated && lazy.Value is IDisposable disposable)
-                disposable.Dispose();
-        }
+
+        DisposeUniqueInstances(removed);
     }
 
     internal void InjectMembers(object instance)
@@ -315,6 +323,52 @@ internal sealed class ServiceProvider : IServiceProvider, IDisposable
     private sealed class ResolutionContext
     {
         public readonly HashSet<Type> CallStack = new();
+    }
+
+    private sealed class ReferenceIdentityComparer :
+        IEqualityComparer<object>
+    {
+        public static readonly ReferenceIdentityComparer Instance =
+            new();
+
+        private ReferenceIdentityComparer()
+        {
+        }
+
+        public new bool Equals(
+            object? left,
+            object? right)
+        {
+            return ReferenceEquals(left, right);
+        }
+
+        public int GetHashCode(
+            object instance)
+        {
+            return RuntimeHelpers.GetHashCode(instance);
+        }
+    }
+
+    private static void DisposeUniqueInstances(
+        IEnumerable<Lazy<object>> values)
+    {
+        var disposed =
+            new HashSet<object>(
+                ReferenceIdentityComparer.Instance);
+
+        foreach (Lazy<object> lazy in values)
+        {
+            if (!lazy.IsValueCreated)
+                continue;
+
+            object instance = lazy.Value;
+
+            if (!disposed.Add(instance))
+                continue;
+
+            if (instance is IDisposable disposable)
+                disposable.Dispose();
+        }
     }
 
     internal readonly struct ServiceKey : IEquatable<ServiceKey>

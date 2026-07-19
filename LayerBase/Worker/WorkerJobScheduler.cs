@@ -14,7 +14,7 @@ internal sealed class WorkerJobScheduler : IDisposable
     private readonly WorkerJobSchedulerOptions _options;
     private readonly object _gate = new();
     private readonly Queue<IWorkerExecutionItem> _queue;
-    private ManualResetEventSlim _signal = new(false);
+    private ManualResetEventSlim? _signal;
     private Thread[] _threads = Array.Empty<Thread>();
     private bool _threadsStarted;
     private bool _accepting = true;
@@ -44,7 +44,7 @@ internal sealed class WorkerJobScheduler : IDisposable
             }
 
             _queue.Enqueue(item);
-            _signal.Set();
+            _signal!.Set();
             return true;
         }
     }
@@ -65,7 +65,7 @@ internal sealed class WorkerJobScheduler : IDisposable
                 pending.Add(_queue.Dequeue());
 
             if (_threadsStarted)
-                _signal.Set();
+                _signal!.Set();
         }
 
         foreach (IWorkerExecutionItem item in pending)
@@ -177,7 +177,7 @@ internal sealed class WorkerJobScheduler : IDisposable
                 continue;
             }
 
-            _signal.Wait();
+            _signal!.Wait();
         }
     }
 
@@ -187,6 +187,6 @@ internal sealed class WorkerJobScheduler : IDisposable
             return;
 
         _resourcesReleased = true;
-        _signal.Dispose();
+        Interlocked.Exchange(ref _signal, null)?.Dispose();
     }
 }

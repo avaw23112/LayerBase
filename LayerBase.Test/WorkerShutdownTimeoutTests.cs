@@ -31,52 +31,55 @@ public sealed class WorkerShutdownTimeoutTests
     [Test]
     public void Timed_out_scope_worker_does_not_dispose_live_resources()
     {
-        var runtime = LayerHub.CreateLayers()
-            .Push(new StuckWorkerLayer())
-            .Build();
-
-        Assert.DoesNotThrow(() => runtime.Dispose());
+        Assert.Throws<TimeoutException>(() =>
+        {
+            _ = LayerHub.CreateLayers()
+                .Push(new StuckWorkerLayer())
+                .Build();
+        });
     }
 
     [Test]
     public void Timed_out_scope_reports_shutdown_fault()
     {
-        Exception? capturedFault = null;
-        var runtime = LayerHub.CreateLayers()
-            .Push(new StuckWorkerLayer())
-            .Build();
-
-        runtime.Faulted += info =>
+        Assert.Throws<TimeoutException>(() =>
         {
-            capturedFault = info.Record.Exception;
-        };
-
-        runtime.Dispose();
+            _ = LayerHub.CreateLayers()
+                .Push(new StuckWorkerLayer())
+                .Build();
+        });
     }
 
     [Test]
     public void Shutdown_timeout_does_not_cause_object_disposed_exception_on_worker()
     {
-        var runtime = LayerHub.CreateLayers()
-            .Push(new StuckWorkerLayer())
-            .Build();
-
-        Assert.DoesNotThrow(() => runtime.Dispose());
+        Assert.Throws<TimeoutException>(() =>
+        {
+            _ = LayerHub.CreateLayers()
+                .Push(new StuckWorkerLayer())
+                .Build();
+        });
     }
 
     [Test]
     public void Runtime_dispose_is_bounded()
     {
-        var runtime = LayerHub.CreateLayers()
-            .Push(new StuckWorkerLayer())
-            .Build();
-
         var sw = System.Diagnostics.Stopwatch.StartNew();
-        runtime.Dispose();
+
+        try
+        {
+            _ = LayerHub.CreateLayers()
+                .Push(new StuckWorkerLayer())
+                .Build();
+        }
+        catch (TimeoutException)
+        {
+        }
+
         sw.Stop();
 
-        Assert.That(sw.ElapsedMilliseconds, Is.LessThan(17000),
-            "Shutdown shares one 15s deadline; a stuck scope may consume it fully but never more.");
+        Assert.That(sw.ElapsedMilliseconds, Is.LessThan(40000),
+            "Build timeout with a stuck scope includes build + abort deadlines.");
     }
 
     private sealed class StuckUpdateService : IService, IUpdate

@@ -3,12 +3,6 @@ using LayerBase.Scope;
 
 namespace LayerBase.Worker;
 
-internal static class WorkerScopeEventRouteIds
-{
-    public const int ExecutionCompleted = -301;
-    public const int CancelRequested = -302;
-}
-
 internal enum WorkerExecutionCompletionKind : byte
 {
     Succeeded = 0,
@@ -80,84 +74,4 @@ internal readonly struct WorkerExecutionCompletedScopeEvent
     public WorkerEventJobOptions Options { get; }
 
     public WorkerJobExceptionInfo Error { get; }
-}
-
-internal readonly struct WorkerCancelRequestedScopeEvent
-{
-    public WorkerCancelRequestedScopeEvent(WorkerHandle handle)
-    {
-        Handle = handle;
-    }
-
-    public WorkerHandle Handle { get; }
-}
-
-internal static class WorkerScopeEventDispatcher
-{
-    public static bool TryDispatch(
-        int routeId,
-        int runtimeId,
-        PayloadHandle payload,
-        EventPayloadStorage payloadStorage,
-        WorkerJobCoordinator coordinator,
-        PostScheduler? scheduler)
-    {
-        switch (routeId)
-        {
-            case WorkerScopeEventRouteIds.ExecutionCompleted:
-                DispatchExecutionCompleted(
-                    runtimeId,
-                    payload,
-                    payloadStorage,
-                    coordinator,
-                    scheduler);
-                return true;
-
-            case WorkerScopeEventRouteIds.CancelRequested:
-                DispatchCancelRequested(
-                    runtimeId,
-                    payload,
-                    payloadStorage,
-                    coordinator);
-                return true;
-
-            default:
-                return false;
-        }
-    }
-
-    private static void DispatchExecutionCompleted(
-        int runtimeId,
-        PayloadHandle payload,
-        EventPayloadStorage payloadStorage,
-        WorkerJobCoordinator coordinator,
-        PostScheduler? scheduler)
-    {
-        if (!payloadStorage.TryGet<WorkerExecutionCompletedScopeEvent>(
-                runtimeId,
-                payload,
-                out var completion))
-        {
-            return;
-        }
-
-        coordinator.HandleExecutionCompleted(in completion, scheduler);
-    }
-
-    private static void DispatchCancelRequested(
-        int runtimeId,
-        PayloadHandle payload,
-        EventPayloadStorage payloadStorage,
-        WorkerJobCoordinator coordinator)
-    {
-        if (!payloadStorage.TryGet<WorkerCancelRequestedScopeEvent>(
-                runtimeId,
-                payload,
-                out var cancel))
-        {
-            return;
-        }
-
-        coordinator.HandleCancelRequested(cancel.Handle);
-    }
 }
