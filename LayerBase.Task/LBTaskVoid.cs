@@ -5,6 +5,8 @@
 /// </summary>
 public readonly struct LBTaskVoid
 {
+    public static Action<Exception>? DefaultExceptionHandler { get; set; }
+
     internal LBTaskVoid(LBTask inner, Action<Exception>? onException)
     {
         Observer.Observe(inner, onException);
@@ -51,13 +53,43 @@ public readonly struct LBTaskVoid
             }
             catch (Exception ex)
             {
-                _onException?.Invoke(ex);
+                ReportException(ex, _onException);
             }
             finally
             {
                 _task = default;
                 _onException = null;
                 Pool.Return(this);
+            }
+        }
+
+        private static void ReportException(Exception exception, Action<Exception>? handler)
+        {
+            if (handler == null)
+            {
+                ReportToDefault(exception);
+                return;
+            }
+
+            try
+            {
+                handler(exception);
+            }
+            catch (Exception callbackException)
+            {
+                ReportToDefault(callbackException);
+            }
+        }
+
+        private static void ReportToDefault(Exception exception)
+        {
+            try
+            {
+                DefaultExceptionHandler?.Invoke(exception);
+            }
+            catch
+            {
+                // Last-chance diagnostics must not tear down completion dispatch.
             }
         }
     }

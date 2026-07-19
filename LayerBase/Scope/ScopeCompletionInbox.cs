@@ -9,7 +9,6 @@ internal enum ScopeCompletionKind : byte
     WorkerExecutionCompleted = 0,
     WorkerCancelRequested = 1,
     WorkerExecutionStarted = 2,
-    ScopeFault = 3,
     LifetimeOperationCompleted = 4
 }
 
@@ -23,20 +22,6 @@ internal readonly struct ScopeCompletionEnvelope
         Kind = kind;
         WorkerCompletion = workerCompletion;
         WorkerHandle = workerHandle;
-        FaultRecord = default;
-        OperationLease = LifetimeOperationLease.Invalid;
-    }
-
-    private ScopeCompletionEnvelope(
-        ScopeCompletionKind kind,
-        in WorkerExecutionCompletedScopeEvent workerCompletion,
-        WorkerHandle workerHandle,
-        in ScopeFaultRecord faultRecord)
-    {
-        Kind = kind;
-        WorkerCompletion = workerCompletion;
-        WorkerHandle = workerHandle;
-        FaultRecord = faultRecord;
         OperationLease = LifetimeOperationLease.Invalid;
     }
 
@@ -45,7 +30,6 @@ internal readonly struct ScopeCompletionEnvelope
         Kind = ScopeCompletionKind.LifetimeOperationCompleted;
         WorkerCompletion = default;
         WorkerHandle = WorkerHandle.Invalid;
-        FaultRecord = default;
         OperationLease = operationLease;
     }
 
@@ -55,22 +39,7 @@ internal readonly struct ScopeCompletionEnvelope
 
     public WorkerHandle WorkerHandle { get; }
 
-    public ScopeFaultRecord FaultRecord { get; }
-
     public LifetimeOperationLease OperationLease { get; }
-
-    public static ScopeCompletionEnvelope ScopeFault(
-        in ScopeFaultRecord record)
-    {
-        var emptyCompletion = default(
-            WorkerExecutionCompletedScopeEvent);
-
-        return new ScopeCompletionEnvelope(
-            ScopeCompletionKind.ScopeFault,
-            in emptyCompletion,
-            WorkerHandle.Invalid,
-            in record);
-    }
 
     public static ScopeCompletionEnvelope WorkerExecutionCompleted(
         in WorkerExecutionCompletedScopeEvent completion)

@@ -21,6 +21,8 @@ internal enum ScopeWorkerStartState : byte
 
 internal sealed class ScopeWorker : IDisposable
 {
+    private const int MaxConsecutiveWorkerLoopFaults = 3;
+
     private readonly ScopeRuntime _runtime;
     private readonly Thread _thread;
     private readonly ManualResetEventSlim _ready = new(false);
@@ -31,6 +33,7 @@ internal sealed class ScopeWorker : IDisposable
     private int _startWaitCompleted;
     private int _threadExited;
     private int _resourcesReleased;
+    private int _consecutiveWorkerLoopFaults;
     private ScopeWorkerShutdownResult _shutdownResult;
     private ScopeWorkerStartState _startState;
 
@@ -290,11 +293,15 @@ internal sealed class ScopeWorker : IDisposable
                         fixedDeltaTime,
                         ref nextTickDeadline);
 
+                    _consecutiveWorkerLoopFaults = 0;
                     continue;
                 }
 
                 if (_runtime.HasImmediateWork)
+                {
+                    _consecutiveWorkerLoopFaults = 0;
                     continue;
+                }
 
                 int waitMilliseconds =
                     CalculateWaitMilliseconds(
@@ -303,9 +310,20 @@ internal sealed class ScopeWorker : IDisposable
 
                 _workSignal.WaitOne(
                     waitMilliseconds);
+
+                _consecutiveWorkerLoopFaults = 0;
             }
             catch (Exception ex)
             {
+                _consecutiveWorkerLoopFaults++;
+                if (_consecutiveWorkerLoopFaults >= MaxConsecutiveWorkerLoopFaults)
+                {
+                    _runtime.ReportFatalFault(
+                        ex,
+                        ScopeFaultPhase.WorkerLoop);
+                    break;
+                }
+
                 _runtime.ReportFault(
                     ex,
                     ScopeFaultPhase.WorkerLoop);

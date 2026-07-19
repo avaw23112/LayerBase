@@ -9,11 +9,14 @@ internal readonly record struct ScopeFaultKey(
 
 internal sealed class ScopeFaultInbox
 {
+    private readonly object _gate = new();
     private readonly ConcurrentDictionary<ScopeFaultKey, MergedFaultEntry> _faults = new();
     private readonly ConcurrentQueue<ScopeFaultKey> _order = new();
     private readonly int _maxCapacity;
     private int _droppedCount;
     private int _capacityExceededCount;
+    private int _mergedCount;
+    private int _highWatermark;
 
     public ScopeFaultInbox(int maxCapacity = 64)
     {
@@ -24,6 +27,10 @@ internal sealed class ScopeFaultInbox
 
     public int CapacityExceededCount => Volatile.Read(ref _capacityExceededCount);
 
+    public int MergedCount => Volatile.Read(ref _mergedCount);
+
+    public int HighWatermark => Volatile.Read(ref _highWatermark);
+
     public int Count => _faults.Count;
 
     public bool TryEnqueue(in ScopeFaultRecord record)
@@ -33,49 +40,74 @@ internal sealed class ScopeFaultInbox
             record.Phase,
             record.Exception.GetType());
 
-        if (_faults.TryGetValue(key, out var existing))
+        lock (_gate)
         {
-            existing.MergeCount++;
-            _faults[key] = existing;
-            return true;
-        }
+            if (_faults.TryGetValue(key, out var existing))
+            {
+                existing.MergeCount++;
+                _faults[key] = existing;
+                Interlocked.Increment(ref _mergedCount);
+                return true;
+            }
 
-        if (_faults.Count >= _maxCapacity)
-        {
-            Interlocked.Increment(ref _droppedCount);
-            return false;
-        }
+            if (_faults.Count >= _maxCapacity)
+            {
+                Interlocked.Increment(ref _droppedCount);
+                Interlocked.Increment(ref _capacityExceededCount);
+                return false;
+            }
 
-        var entry = new MergedFaultEntry(record, 1);
-        if (_faults.TryAdd(key, entry))
-        {
+            var entry = new MergedFaultEntry(record, 1);
+            _faults[key] = entry;
             _order.Enqueue(key);
+            UpdateHighWatermark(_faults.Count);
             return true;
         }
-
-        return false;
     }
 
     public bool TryDequeue(out ScopeFaultRecord record)
     {
-        while (_order.TryDequeue(out var key))
+        lock (_gate)
         {
-            if (_faults.TryRemove(key, out var entry))
+            while (_order.TryDequeue(out var key))
             {
-                record = entry.Record;
-                return true;
+                if (_faults.TryRemove(key, out var entry))
+                {
+                    record = entry.Record;
+                    return true;
+                }
             }
-        }
 
-        record = default;
-        return false;
+            record = default;
+            return false;
+        }
     }
 
     public void Clear()
     {
-        _faults.Clear();
-        while (_order.TryDequeue(out _)) { }
-        _droppedCount = 0;
+        lock (_gate)
+        {
+            _faults.Clear();
+            while (_order.TryDequeue(out _)) { }
+            _droppedCount = 0;
+            _capacityExceededCount = 0;
+            _mergedCount = 0;
+            _highWatermark = 0;
+        }
+    }
+
+    private void UpdateHighWatermark(int count)
+    {
+        int current;
+        do
+        {
+            current = Volatile.Read(ref _highWatermark);
+            if (count <= current)
+            {
+                return;
+            }
+        }
+        while (Interlocked.CompareExchange(ref _highWatermark, count, current) != current);
     }
 
     internal struct MergedFaultEntry

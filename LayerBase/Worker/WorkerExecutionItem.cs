@@ -8,6 +8,8 @@ internal interface IWorkerExecutionItem
     void Execute(int workerIndex);
 
     void CancelBeforeRun();
+
+    void FailInfrastructure(Exception exception);
 }
 
 internal sealed class WorkerExecutionItem<TJob, TInput, TEvent> : IWorkerExecutionItem
@@ -109,6 +111,26 @@ internal sealed class WorkerExecutionItem<TJob, TInput, TEvent> : IWorkerExecuti
     public void CancelBeforeRun()
     {
         WorkerExecutionCompletedScopeEvent completion = CreateCancelledCompletion();
+
+        try
+        {
+            SubmitCompletion(in completion);
+        }
+        finally
+        {
+            Return();
+        }
+    }
+
+    public void FailInfrastructure(Exception exception)
+    {
+        WorkerExecutionCompletedScopeEvent completion =
+            new(
+                _handle,
+                WorkerExecutionCompletionKind.Faulted,
+                result: null,
+                _options,
+                WorkerJobExceptionInfo.FromException(exception));
 
         try
         {

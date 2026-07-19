@@ -9,13 +9,16 @@ internal sealed class ScopeTransport : IDisposable
     private readonly EventPayloadStorage _eventPayloadStorage = new();
     private readonly EventPayloadStorage _callPayloadStorage = new();
     private readonly ScopeIngressWriterGate _writerGate = new();
+    private readonly Action? _onIngressAccepted;
     private int _callSequence;
     private bool _businessAdmissionClosed;
     private int _disposed;
 
     public ScopeTransport(ScopeAddress address, Action? onIngressAccepted = null)
     {
+        _onIngressAccepted = onIngressAccepted;
         CompletionInbox = new ScopeCompletionInbox(onIngressAccepted);
+        FaultInbox = new ScopeFaultInbox();
         EventInbox = ScopeBoundedInbox<ScopeEventEnvelope>.CreateEventInbox(
             new ScopeEventInboxOptions(capacity: 1024, reservedForInternal: 128, reservedForCritical: 16),
             onIngressAccepted);
@@ -28,6 +31,8 @@ internal sealed class ScopeTransport : IDisposable
     public ScopeEndpoint Endpoint { get; }
 
     internal ScopeCompletionInbox CompletionInbox { get; }
+
+    internal ScopeFaultInbox FaultInbox { get; }
 
     internal ScopeBoundedInbox<ScopeEventEnvelope> EventInbox { get; }
 
@@ -162,6 +167,17 @@ internal sealed class ScopeTransport : IDisposable
         in ScopeCompletionEnvelope envelope)
     {
         CompletionInbox.Enqueue(in envelope);
+    }
+
+    internal bool EnqueueFault(in ScopeFaultRecord record)
+    {
+        bool accepted = FaultInbox.TryEnqueue(in record);
+        if (accepted)
+        {
+            _onIngressAccepted?.Invoke();
+        }
+
+        return accepted;
     }
 
     internal static ScopePostResult ToPostResult(ScopeEnqueueResult result)

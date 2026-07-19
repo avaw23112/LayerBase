@@ -192,7 +192,22 @@ internal sealed class WorkerJobScheduler : ILifetimeParticipant, IDisposable
 
             if (item != null)
             {
-                item.Execute(workerIndex);
+                try
+                {
+                    item.Execute(workerIndex);
+                }
+                catch (Exception exception)
+                {
+                    try
+                    {
+                        item.FailInfrastructure(exception);
+                    }
+                    catch
+                    {
+                        // Infrastructure fault reporting must not tear down the worker loop.
+                    }
+                }
+
                 continue;
             }
 

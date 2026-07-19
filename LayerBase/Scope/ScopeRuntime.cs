@@ -412,6 +412,7 @@ internal sealed class ScopeRuntime : IDisposable
             return;
 
         DrainCompletionInbox();
+        DrainFaultInbox();
         DisposeAfterControlIfNeeded();
 
         if (_state == ScopeRuntimeState.Disposed)
@@ -735,10 +736,6 @@ internal sealed class ScopeRuntime : IDisposable
                 case ScopeCompletionKind.WorkerExecutionStarted:
                     WorkerJobs.MarkExecutionStarted(
                         envelope.WorkerHandle);
-                    break;
-
-                case ScopeCompletionKind.ScopeFault:
-                    _runtime.ReportScopeFault(envelope.FaultRecord);
                     break;
 
                 case ScopeCompletionKind.LifetimeOperationCompleted:
@@ -1066,6 +1063,19 @@ internal sealed class ScopeRuntime : IDisposable
         catch (Exception ex)
         {
             queuedCall.Completion.TrySetException(ex);
+        }
+    }
+
+    private void DrainFaultInbox()
+    {
+        const int MaxFaultsPerPump = 32;
+        int processed = 0;
+
+        while (processed < MaxFaultsPerPump
+               && Transport.FaultInbox.TryDequeue(out ScopeFaultRecord record))
+        {
+            _runtime.ReportScopeFault(record);
+            processed++;
         }
     }
 
@@ -1554,9 +1564,7 @@ internal sealed class ScopeRuntime : IDisposable
 
         if (TryGetScopeEndpoint(ScopeDefinitionIds.Main, out var mainEndpoint))
         {
-            ScopeCompletionEnvelope envelope =
-                ScopeCompletionEnvelope.ScopeFault(in record);
-            mainEndpoint.Transport.EnqueueCompletion(in envelope);
+            mainEndpoint.Transport.EnqueueFault(in record);
         }
 
         RequireHost().ApplyFaultPolicy(record);
