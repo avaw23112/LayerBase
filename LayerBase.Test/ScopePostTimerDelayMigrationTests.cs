@@ -178,6 +178,7 @@ public sealed class ScopePostTimerDelayMigrationTests
         scope.InitializeOrUpdateScheduler(PostSchedulerOptions.Default, new EventBuildPolicyTable(), plans);
         scope.InitializeTimer(TimeSchedulerOptions.Default);
         scope.InitializeDelay(DelayBufferOptions.Default);
+        scope.RunRuntimeStartOnOwnerThread();
     }
 
     private sealed class ScopeDelayService : IService

@@ -56,6 +56,9 @@ public class InlineScopeFairnessTests
             new PostTypePlan(id, PostDeliveryMode.Normal, BackpressurePolicy.DropOldest, 0, options.DefaultBackpressure),
         });
 
+        scopeA.RunRuntimeStartOnOwnerThread();
+        scopeB.RunRuntimeStartOnOwnerThread();
+
         scopeA.PostScheduler!.TryPost(new BudgetTestEventA { Value = 1 });
         scopeB.PostScheduler!.TryPost(new BudgetTestEventA { Value = 1 });
 

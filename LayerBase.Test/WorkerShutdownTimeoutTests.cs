@@ -83,13 +83,13 @@ public sealed class WorkerShutdownTimeoutTests
             "Build timeout with a stuck scope includes build + abort deadlines.");
     }
 
-    private sealed class StuckUpdateService : IService, IUpdate
+    private sealed class StuckUpdateService : IService, IRuntimeStart
     {
         private volatile bool _shouldStop;
 
         public void ConfigureServices(IServiceCollection services) { }
 
-        public void Update()
+        public void RuntimeStart()
         {
             while (!_shouldStop)
             {
@@ -222,7 +222,7 @@ public sealed class WorkerShutdownTimeoutTests
         return workers[0];
     }
 
-    private sealed class BlockableUpdateService : IService, IUpdate
+    private sealed class BlockableUpdateService : IService, IRuntimeStart
     {
         private readonly ManualResetEventSlim _blocker;
 
@@ -233,7 +233,7 @@ public sealed class WorkerShutdownTimeoutTests
 
         public void ConfigureServices(IServiceCollection services) { }
 
-        public void Update()
+        public void RuntimeStart()
         {
             _blocker.Wait();
         }

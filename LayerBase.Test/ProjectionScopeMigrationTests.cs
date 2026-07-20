@@ -73,6 +73,7 @@ public class ProjectionScopeMigrationTests
         };
 
         using ScopeRuntimeHost host = ScopeRuntimeHost.Create(runtime, plans, runtime.Id, generation: 1);
+        StartAllScopes(host);
         runtime.MainActorRuntime.PrepareRuntimeBuild();
         RegisterProjectionProbe(actorTypeId: 220);
         runtime.MainActorRuntime.CompleteRuntimeBuild();
@@ -114,6 +115,7 @@ public class ProjectionScopeMigrationTests
         };
 
         using ScopeRuntimeHost host = ScopeRuntimeHost.Create(runtime, plans, runtime.Id, generation: 1);
+        StartAllScopes(host);
         runtime.MainActorRuntime.PrepareRuntimeBuild();
         RegisterProjectionProbe(actorTypeId: 221);
         runtime.MainActorRuntime.CompleteRuntimeBuild();
@@ -179,6 +181,7 @@ public class ProjectionScopeMigrationTests
         };
 
         using ScopeRuntimeHost host = ScopeRuntimeHost.Create(runtime, plans, runtime.Id, generation: 1);
+        StartAllScopes(host);
         runtime.MainActorRuntime.PrepareRuntimeBuild();
         RegisterProjectionProbe(actorTypeId: 222);
         runtime.MainActorRuntime.CompleteRuntimeBuild();
@@ -336,6 +339,7 @@ public class ProjectionScopeMigrationTests
         };
 
         using ScopeRuntimeHost host = ScopeRuntimeHost.Create(runtime, plans, runtime.Id, generation: 1);
+        StartAllScopes(host);
         runtime.MainActorRuntime.PrepareRuntimeBuild();
         RegisterProjectionProbe(actorTypeId: 223);
         runtime.MainActorRuntime.CompleteRuntimeBuild();
@@ -384,6 +388,7 @@ public class ProjectionScopeMigrationTests
         };
 
         using ScopeRuntimeHost host = ScopeRuntimeHost.Create(runtime, plans, runtime.Id, generation: 1);
+        StartAllScopes(host);
         runtime.MainActorRuntime.PrepareRuntimeBuild();
         RegisterProjectionProbe(actorTypeId: 224);
         runtime.MainActorRuntime.CompleteRuntimeBuild();
@@ -444,6 +449,12 @@ public class ProjectionScopeMigrationTests
             fixedDeltaTime: 1f / 60f,
             pumpFixedUpdate: true,
             budget: ref budget);
+    }
+
+    private static void StartAllScopes(ScopeRuntimeHost host)
+    {
+        foreach (ScopeRuntime scope in host.Scopes)
+            scope.RunRuntimeStartOnOwnerThread();
     }
 
     private static Entity CreateProjectedEntity(

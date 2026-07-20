@@ -36,6 +36,7 @@ public sealed class ScopeWorkerBlockingTests
 
         ScopeRuntime workerScope = host.Scopes[1];
         host.StartWorkers();
+        StartWorkerScope(workerScope);
 
         Assert.That(firstTickDone.Wait(TimeSpan.FromSeconds(2)), Is.True);
 
@@ -69,6 +70,7 @@ public sealed class ScopeWorkerBlockingTests
 
         ScopeRuntime workerScope = host.Scopes[1];
         host.StartWorkers();
+        StartWorkerScope(workerScope);
 
         Assert.That(firstTickDone.Wait(TimeSpan.FromSeconds(2)), Is.True);
 
@@ -107,6 +109,7 @@ public sealed class ScopeWorkerBlockingTests
 
         ScopeRuntime workerScope = host.Scopes[1];
         host.StartWorkers();
+        StartWorkerScope(workerScope);
 
         Assert.That(firstTickDone.Wait(TimeSpan.FromSeconds(2)), Is.True);
 
@@ -147,6 +150,7 @@ public sealed class ScopeWorkerBlockingTests
 
         ScopeRuntime workerScope = host.Scopes[1];
         host.StartWorkers();
+        StartWorkerScope(workerScope);
 
         Assert.That(firstTickDone.Wait(TimeSpan.FromSeconds(2)), Is.True);
         Assert.That(Volatile.Read(ref updateCount), Is.EqualTo(1));
@@ -184,6 +188,7 @@ public sealed class ScopeWorkerBlockingTests
             generation: 1);
 
         host.StartWorkers();
+        StartWorkerScope(host.Scopes[1]);
 
         Assert.That(firstUpdateDone.Wait(TimeSpan.FromSeconds(2)), Is.True);
 
@@ -221,6 +226,7 @@ public sealed class ScopeWorkerBlockingTests
 
         ScopeRuntime workerScope = host.Scopes[1];
         host.StartWorkers();
+        StartWorkerScope(workerScope);
 
         Assert.That(firstTickDone.Wait(TimeSpan.FromSeconds(2)), Is.True);
 
@@ -273,6 +279,21 @@ public sealed class ScopeWorkerBlockingTests
                 Array.Empty<FixedUpdateInvoker>(),
                 Array.Empty<LifecycleInvoker>(),
                 Array.Empty<LifecycleInvoker>()));
+    }
+
+    private static void StartWorkerScope(ScopeRuntime scope)
+    {
+        var startTask = scope.RequestRuntimeStartAsync();
+
+        Assert.That(
+            SpinWait.SpinUntil(
+                () => startTask.GetAwaiter().IsCompleted,
+                TimeSpan.FromSeconds(2)),
+            Is.True);
+
+        Assert.That(
+            startTask.GetAwaiter().GetResult().Result,
+            Is.EqualTo(ScopeControlResult.Succeeded));
     }
 
     private static ScopeExecutionPlan CreateOverrunPlan(

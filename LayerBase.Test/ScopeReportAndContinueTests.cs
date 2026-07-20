@@ -64,6 +64,7 @@ public sealed class ScopeReportAndContinueTests
             generation: 1);
 
         var sourceScope = host.Scopes[1];
+        sourceScope.RunRuntimeStartOnOwnerThread();
         sourceScope.PumpUpdate(0.016f);
 
         Assert.That(sourceScope.State, Is.Not.EqualTo(ScopeRuntimeState.Faulted));

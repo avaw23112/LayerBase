@@ -1055,9 +1055,24 @@ public sealed class EventCenter
             LifetimeOperationLease? lease,
             ScopeTransport? transport)
         {
-            Debug.Assert(
-                !task.GetAwaiter().IsCompleted,
-                "ObserveIncomplete must only receive an incomplete LBTask.");
+            var awaiter = task.GetAwaiter();
+            if (awaiter.IsCompleted)
+            {
+                try
+                {
+                    awaiter.GetResult();
+                }
+                catch (Exception ex)
+                {
+                    owner.HandleFault(faultSlot, eventNameId, in payload, ex);
+                }
+                finally
+                {
+                    CompleteLease(lease, transport);
+                }
+
+                return;
+            }
 
             if (!s_pool.TryDequeue(out var context))
                 context = new AsyncFaultContext<T>();
@@ -1072,7 +1087,7 @@ public sealed class EventCenter
             context._lease = lease;
             context._transport = transport;
             Volatile.Write(ref context._active, 1);
-            task.GetAwaiter().OnCompleted(context._continuation);
+            awaiter.OnCompleted(context._continuation);
         }
 
         private void Complete()
@@ -1094,15 +1109,7 @@ public sealed class EventCenter
             {
                 if (_lease != null)
                 {
-                    if (_transport != null)
-                    {
-                        _transport.EnqueueCompletion(
-                            ScopeCompletionEnvelope.LifetimeOperationCompleted(_lease));
-                    }
-                    else
-                    {
-                        _lease.TryComplete();
-                    }
+                    CompleteLease(_lease, _transport);
                 }
 
                 _owner = null;
@@ -1114,6 +1121,24 @@ public sealed class EventCenter
                 _transport = null;
                 if (Interlocked.Increment(ref s_poolCount) <= MAX_POOL_SIZE) s_pool.Enqueue(this);
                 else Interlocked.Decrement(ref s_poolCount);
+            }
+        }
+
+        private static void CompleteLease(
+            LifetimeOperationLease? lease,
+            ScopeTransport? transport)
+        {
+            if (lease == null)
+                return;
+
+            if (transport != null)
+            {
+                transport.EnqueueCompletion(
+                    ScopeCompletionEnvelope.LifetimeOperationCompleted(lease));
+            }
+            else
+            {
+                lease.TryComplete();
             }
         }
     }

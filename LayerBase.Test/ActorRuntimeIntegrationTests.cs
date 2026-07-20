@@ -362,9 +362,16 @@ public class ActorRuntimeIntegrationTests
         };
 
         ScopeRuntimeHost host = ScopeRuntimeHost.Create(runtime, plans, runtime.Id, generation: 1);
+        StartAllScopes(host);
         runtime.MainActorRuntime.PrepareRuntimeBuild();
         runtime.MainActorRuntime.CompleteRuntimeBuild();
         return new ScopeRuntimeHostFixture(runtime, host);
+    }
+
+    private static void StartAllScopes(ScopeRuntimeHost host)
+    {
+        foreach (ScopeRuntime scope in host.Scopes)
+            scope.RunRuntimeStartOnOwnerThread();
     }
 
     private sealed class ScopeRuntimeHostFixture : IDisposable

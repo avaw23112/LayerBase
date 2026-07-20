@@ -143,7 +143,7 @@ public static class LayerHub
 
             foreach (var runtime in runtimes)
             {
-                runtime.Dispose();
+                runtime.DisposeFromHubReset();
             }
 
             s_freeRuntimeIds.Clear();
